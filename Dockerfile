@@ -7,7 +7,7 @@ ARG ERLANG_VERSION
 # is updated with the current date. It will force refresh of all
 # of the base images and things like `apt-get update` won't be using
 # old cached versions when the Dockerfile is built.
-ENV REFRESHED_AT=2021-05-10 \
+ENV REFRESHED_AT=2021-05-24 \
     LANG=C.UTF-8 \
     HOME=/opt/app/ \
     TERM=xterm \
@@ -26,24 +26,24 @@ RUN apk --no-cache --update-cache --available upgrade
 # Install bash and Erlang/OTP deps
 RUN \
     apk add --no-cache --update-cache \
-      bash \
-      ca-certificates \
-      ncurses-dev \
-      openssl-dev \
-      pcre \
-      unixodbc-dev \
-      zlib-dev
+    bash \
+    ca-certificates \
+    ncurses-dev \
+    openssl-dev \
+    pcre \
+    unixodbc-dev \
+    zlib-dev
 
 # Install Erlang/OTP build deps
 RUN \
     apk add --no-cache --virtual .erlang-build \
-      dpkg-dev \
-      dpkg \
-      binutils \
-      git \
-      autoconf \
-      build-base \
-      perl-dev
+    dpkg-dev \
+    dpkg \
+    binutils \
+    git \
+    autoconf \
+    build-base \
+    perl-dev
 
 WORKDIR /tmp/erlang-build
 
@@ -60,21 +60,21 @@ RUN \
     # Configure
     ./otp_build autoconf && \
     ./configure \
-      --prefix=/usr/local \
-      --build="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
-      --sysconfdir=/etc \
-      --mandir=/usr/share/man \
-      --infodir=/usr/share/info \
-      --without-javac \
-      --without-wx \
-      --without-debugger \
-      --without-observer \
-      --without-jinterface \
-      --without-et \
-      --without-megaco \
-      --enable-threads \
-      --enable-shared-zlib \
-      --enable-ssl=dynamic-ssl-lib && \
+    --prefix=/usr/local \
+    --build="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
+    --sysconfdir=/etc \
+    --mandir=/usr/share/man \
+    --infodir=/usr/share/info \
+    --without-javac \
+    --without-wx \
+    --without-debugger \
+    --without-observer \
+    --without-jinterface \
+    --without-et \
+    --without-megaco \
+    --enable-threads \
+    --enable-shared-zlib \
+    --enable-ssl=dynamic-ssl-lib && \
     make -j4
 
 # Install to temporary location
@@ -87,12 +87,12 @@ RUN \
     rm -rf /tmp/usr/local/lib/erlang/usr/ && \
     rm -rf /tmp/usr/local/lib/erlang/misc/ && \
     for DIR in /tmp/usr/local/lib/erlang/erts* /tmp/usr/local/lib/erlang/lib/*; do \
-        rm -rf ${DIR}/src/*.erl; \
-        rm -rf ${DIR}/doc; \
-        rm -rf ${DIR}/man; \
-        rm -rf ${DIR}/examples; \
-        rm -rf ${DIR}/emacs; \
-        rm -rf ${DIR}/c_src; \
+    rm -rf ${DIR}/src/*.erl; \
+    rm -rf ${DIR}/doc; \
+    rm -rf ${DIR}/man; \
+    rm -rf ${DIR}/examples; \
+    rm -rf ${DIR}/emacs; \
+    rm -rf ${DIR}/c_src; \
     done && \
     rm -rf /tmp/usr/local/lib/erlang/erts-*/lib/ && \
     rm /tmp/usr/local/lib/erlang/erts-*/bin/dialyzer && \
@@ -131,13 +131,13 @@ RUN \
     apk --no-cache --update-cache --available upgrade && \
     # Install bash and Erlang/OTP deps
     apk add --no-cache --update-cache \
-      bash \
-      ca-certificates \
-      ncurses \
-      openssl \
-      pcre \
-      unixodbc \
-      zlib && \
+    bash \
+    ca-certificates \
+    ncurses \
+    openssl \
+    pcre \
+    unixodbc \
+    zlib && \
     # Update ca certificates
     update-ca-certificates --fresh
 
