@@ -8,11 +8,13 @@ on:
       - 'Makefile'
       - 'Dockerfile'
       - 'VERSION'
+      - '.github/workflows/ci.yml'
   pull_request:
     paths:
       - 'Makefile'
       - 'Dockerfile'
       - 'VERSION'
+      - '.github/workflows/ci.yml'
 
 env:
   BUILDX_CACHE_DIR: /tmp/buildx
@@ -20,17 +22,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy: 
+      matrix: 
+        otp: [23.3.4.5, 24.0.5]
+        alpine: [3.14.1]
+        latest: [false]
+        include:
+          - otp: 24.0.5
+            alpine: 3.14.1
+            latest: true
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-
-    - name: Get Version Info
-      id: versions
-      run: |
-        erlang_version="$(cat VERSION | grep erlang | cut -d ' ' -f2)"
-        alpine_version="$(cat VERSION | grep alpine | cut -d ' ' -f2)"
-        echo "::set-output name=erlang_version::${erlang_version}"
-        echo "::set-output name=alpine_version::${alpine_version}"
 
     - name: Setup QEMU
       uses: docker/setup-qemu-action@v1
@@ -43,17 +46,17 @@ jobs:
       id: cache
       with:
         path: /tmp/buildx
-        key: buildx-alpine${{ steps.versions.outputs.alpine_version }}-erlang${{ steps.versions.outputs.erlang_version }}
+        key: buildx-alpine${{ matrix.alpine }}-erlang${{ matrix.otp }}
         restore-keys: |
-          buildx-alpine${{ steps.versions.outputs.alpine_version }}-erlang
-          buildx-alpine${{ steps.versions.outputs.alpine_version }}-
+          buildx-alpine${{ matrix.alpine }}-erlang
+          buildx-alpine${{ matrix.alpine }}-
           buildx-alpine
 
-    - name: Build Image
+    - name: Build/Validate Image
       env:
-        VERSION: ${{ steps.versions.outputs.erlang_version }}
-        ALPINE_VERSION: ${{ steps.versions.outputs.alpine_version }}
-      run: make build
+        VERSION: ${{ matrix.otp }}
+        ALPINE_VERSION: ${{ matrix.alpine }}
+      run: make validate
 
     - name: Login
       if: ${{ github.event_name == 'push' }}
@@ -65,6 +68,7 @@ jobs:
     - name: Publish Image
       if: ${{ github.event_name == 'push' }}
       env:
-        VERSION: ${{ steps.versions.outputs.erlang_version }}
-        ALPINE_VERSION: ${{ steps.versions.outputs.alpine_version }}
+        VERSION: ${{ matrix.otp }}
+        ALPINE_VERSION: ${{ matrix.alpine }}
+        IS_LATEST: ${{ matrix.latest }}
       run: make release

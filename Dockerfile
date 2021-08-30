@@ -7,7 +7,7 @@ ARG ERLANG_VERSION
 # is updated with the current date. It will force refresh of all
 # of the base images and things like `apt-get update` won't be using
 # old cached versions when the Dockerfile is built.
-ENV REFRESHED_AT=2021-06-08 \
+ENV REFRESHED_AT=2021-08-05 \
     LANG=C.UTF-8 \
     HOME=/opt/app/ \
     TERM=xterm \
@@ -27,12 +27,11 @@ RUN apk --no-cache --update-cache --available upgrade
 RUN \
     apk add --no-cache --update-cache \
     bash \
+    curl \
     ca-certificates \
     libgcc \
-    ncurses-dev \
-    openssl-dev \
+    lksctp-tools \
     pcre \
-    unixodbc-dev \
     zlib-dev
 
 # Install Erlang/OTP build deps
@@ -40,29 +39,33 @@ RUN \
     apk add --no-cache --virtual .erlang-build \
     dpkg-dev \
     dpkg \
-    binutils \
-    git \
+    gcc \
+    g++ \
+    libc-dev \
+    linux-headers \
+    make \
     autoconf \
-    build-base \
-    perl-dev
+    ncurses-dev \
+    openssl-dev \
+    unixodbc-dev \
+    lksctp-tools-dev \
+    tar
 
 WORKDIR /tmp/erlang-build
 
-COPY patches /tmp/patches
-
-# Clone, Configure, Build
+# Download OTP
 RUN \
-    # Shallow clone Erlang/OTP
-    git clone -b OTP-$ERLANG_VERSION --single-branch --depth 1 https://github.com/erlang/otp.git . && \
-    # Erlang/OTP build env
+    curl -sSL "https://github.com/erlang/otp/releases/download/OTP-${ERLANG_VERSION}/otp_src_${ERLANG_VERSION}.tar.gz" | \
+    tar --strip-components=1 -xzf -
+
+# Configure & Build
+RUN \
     export ERL_TOP=/tmp/erlang-build && \
-    export PATH=$ERL_TOP/bin:$PATH && \
-    export CPPFlAGS="-D_BSD_SOURCE $CPPFLAGS" && \
-    # Configure
+    export CPPFLAGS="-D_BSD_SOURCE $CPPFLAGS" && \
     ./otp_build autoconf && \
     ./configure \
+    --build="$(dpkg-architecture --query DEB_HOST_GNU_TYPE)" \
     --prefix=/usr/local \
-    --build="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
     --sysconfdir=/etc \
     --mandir=/usr/share/man \
     --infodir=/usr/share/info \
@@ -76,30 +79,30 @@ RUN \
     --enable-threads \
     --enable-shared-zlib \
     --enable-ssl=dynamic-ssl-lib && \
-    make -j4
+    make -j$(getconf _NPROCESSORS_ONLN)
 
 # Install to temporary location
 RUN \
     make DESTDIR=/tmp install && \
+    cd /tmp && rm -rf /tmp/erlang-build && \
+    find /tmp/usr/local -regex '/tmp/usr/local/lib/erlang/\(lib/\|erts-\).*/\(man\|doc\|obj\|c_src\|emacs\|info\|examples\)' | xargs rm -rf && \
+    find /tmp/usr/local -name src | xargs -r find | grep -v '\.hrl$' | xargs rm -v || true && \
+    find /tmp/usr/local -name src | xargs -r find | xargs rmdir -vp || true && \
     # Strip install to reduce size
+    scanelf --nobanner -E ET_EXEC -BF '%F' --recursive /tmp/usr/local | xargs -r strip --strip-all && \
+    scanelf --nobanner -E ET_DYN -BF '%F' --recursive /tmp/usr/local | xargs -r strip --strip-unneeded && \
+    runDeps="$( \
+    scanelf --needed --nobanner --format '%n#p' --recursive /tmp/usr/local \
+    | tr ',' '\n' \
+    | sort -u \
+    | awk 'system("[ -e /tmp/usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+    )" && \
     ln -s /tmp/usr/local/lib/erlang /usr/local/lib/erlang && \
     /tmp/usr/local/bin/erl -eval "beam_lib:strip_release('/tmp/usr/local/lib/erlang/lib')" -s init stop > /dev/null && \
     (/usr/bin/strip /tmp/usr/local/lib/erlang/erts-*/bin/* || true) && \
-    rm -rf /tmp/usr/local/lib/erlang/usr/ && \
-    rm -rf /tmp/usr/local/lib/erlang/misc/ && \
-    for DIR in /tmp/usr/local/lib/erlang/erts* /tmp/usr/local/lib/erlang/lib/*; do \
-    rm -rf ${DIR}/src/*.erl; \
-    rm -rf ${DIR}/doc; \
-    rm -rf ${DIR}/man; \
-    rm -rf ${DIR}/examples; \
-    rm -rf ${DIR}/emacs; \
-    rm -rf ${DIR}/c_src; \
-    done && \
-    rm -rf /tmp/usr/local/lib/erlang/erts-*/lib/ && \
-    rm /tmp/usr/local/lib/erlang/erts-*/bin/dialyzer && \
-    rm /tmp/usr/local/lib/erlang/erts-*/bin/erlc && \
-    rm /tmp/usr/local/lib/erlang/erts-*/bin/typer && \
-    rm /tmp/usr/local/lib/erlang/erts-*/bin/ct_run
+    apk add --no-cache \
+    $runDeps \
+    lksctp-tools
 
 ### Final Image
 
@@ -133,6 +136,7 @@ RUN \
     # Install bash and Erlang/OTP deps
     apk add --no-cache --update-cache \
     bash \
+    libstdc++ \
     ca-certificates \
     ncurses \
     openssl \
